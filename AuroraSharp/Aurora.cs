@@ -278,8 +278,6 @@ namespace AuroraSharp
 		//   ###########################################
 		//   # Effect methods
 		//   ###########################################
-
-		//   _reserved_effect_names = ["*Static*", "*Dynamic*", "*Solid*"]
 		
 		public Task<string> GetSelectedEffect() => Get("effects/select");
 		
@@ -292,11 +290,6 @@ namespace AuroraSharp
 			return result;
 		}
 
-		//   def effect_set_raw(self, effect_data: dict):
-		//       """Sends a raw dict containing effect data to the device.
-		//       The dict given must match the json structure specified in the API docs."""
-		//       data = {"write": effect_data}
-		//       self.__put("effects", data)
 		public Task WriteEffect(Effect effect)
 		{
 			effect.Command = "add";
@@ -305,7 +298,6 @@ namespace AuroraSharp
 			json = "{\"write\": " + json + "}";
 			return Put("effects", json);
 		}
-
 
 		public async Task<EffectDetails> GetEffectDetails(string effect)
 		{
