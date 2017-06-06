@@ -4,6 +4,17 @@ namespace AuroraSharp
 {
 	public class Color
 	{
+		public Color()
+		{
+			
+		}
+
+		public Color(int hue, int saturation, int brightness)
+		{
+			Hue = hue;
+			Saturation = saturation;
+			Brightness = brightness;
+		}
 
 		[JsonProperty("hue")]
 		public int Hue { get; set; }

@@ -1,15 +1,47 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Zeroconf;
 
 namespace AuroraSharp
 {
+	public class AuroraMessageException : Exception
+	{
+		public HttpStatusCode StatusCode { get; private set; }
+
+		public AuroraMessageException(HttpStatusCode statusCode)
+		{
+			StatusCode = statusCode;
+		}
+	}
+
 	public class Aurora
 	{
+		public static async Task<IList<string>> FindAuroras()
+		{
+			IReadOnlyList<IZeroconfHost> results = await
+				ZeroconfResolver.ResolveAsync("_nanoleafapi._tcp.local.").ConfigureAwait(false);
+
+			return results.Select(zc => zc.IPAddress).ToList();
+		}
+
+		public static async Task<string> GetAccessTokenForAurora(string ipAddress)
+		{
+			var url = "http://" + ipAddress + ":16021/api/v1/new";
+			var client = new HttpClient
+			{
+				BaseAddress = new Uri(url)
+			};
+
+			var result = await client.GetAsync("").ConfigureAwait(false);
+			return await result.Content.ReadAsStringAsync().ConfigureAwait(false);
+		}
+
 		private readonly string _address;
 		private readonly string _authToken;
 		private readonly string _baseUrl;
@@ -25,8 +57,7 @@ namespace AuroraSharp
 			_baseUrl = "http://" + _address + ":16021/api/v1/" + _authToken + "/";
 			_client = new HttpClient
 			{
-				BaseAddress = new Uri(_baseUrl),
-				Timeout = TimeSpan.FromSeconds(10)
+				BaseAddress = new Uri(_baseUrl)
 			};
 		}
 
@@ -48,13 +79,35 @@ namespace AuroraSharp
 		private async Task<string> Put(string endpoint, string data)
 		{
 			var result = await _client.PutAsync(endpoint, new StringContent(data)).ConfigureAwait(false);
-			return await result.Content.ReadAsStringAsync().ConfigureAwait(false);
+			if (result.IsSuccessStatusCode)
+				return await result.Content.ReadAsStringAsync().ConfigureAwait(false);
+			switch (result.StatusCode)
+			{
+				case HttpStatusCode.BadRequest:
+				case HttpStatusCode.Unauthorized:
+				case HttpStatusCode.Forbidden:
+				case (HttpStatusCode)422: // Unprocessable Entry
+					throw new AuroraMessageException(result.StatusCode);
+				default:
+					throw new Exception("Unkown Error Occurred");
+			}
 		}
 
 		private async Task<string> Get(string endpoint = "")
 		{
 			var result = await _client.GetAsync(endpoint).ConfigureAwait(false);
-			return await result.Content.ReadAsStringAsync();
+			if (result.IsSuccessStatusCode)
+				return await result.Content.ReadAsStringAsync();
+			switch (result.StatusCode)
+			{
+				case HttpStatusCode.BadRequest:
+				case HttpStatusCode.Unauthorized:
+				case HttpStatusCode.Forbidden:
+				case (HttpStatusCode)422: // Unprocessable Entry
+					throw new AuroraMessageException(result.StatusCode);
+				default:
+					throw new Exception("Unkown Error Occurred");
+			}
 		}
 
 		private async Task<int> GetInt(string endpoint = "")
@@ -125,7 +178,7 @@ namespace AuroraSharp
 		public Task SetBrightness(int level)
 		{
 			if (level < 0 || level > 100)
-				throw new ArgumentOutOfRangeException("level");
+				throw new ArgumentOutOfRangeException(nameof(level));
 			return Put("state", new StateSetter("brightness", level.ToString()));
 		}
 
@@ -169,7 +222,7 @@ namespace AuroraSharp
 		public Task SetSaturation(int saturation)
 		{
 			if (saturation < 0 || saturation > 100)
-				throw new ArgumentOutOfRangeException("sat");
+				throw new ArgumentOutOfRangeException(nameof(saturation));
 			return Put("state", new StateSetter("sat", saturation.ToString()));
 		}
 
@@ -191,7 +244,7 @@ namespace AuroraSharp
 		public Task SetColorTemperature(int temp)
 		{
 			if (temp < 1200 || temp > 6500)
-				throw new ArgumentOutOfRangeException("temp");
+				throw new ArgumentOutOfRangeException(nameof(temp));
 			return Put("state", new StateSetter("ct", temp.ToString()));
 		}
 
@@ -230,7 +283,7 @@ namespace AuroraSharp
 		
 		public Task<string> GetSelectedEffect() => Get("effects/select");
 		
-		public Task SetEffect(string effect) => Put("effects", new Dictionary<string, string>() {{"select", effect}});
+		public Task SetEffect(string effect) => Put("effects", new Dictionary<string, string> {{"select", effect}});
 
 		public async Task<IList<string>> ListEffects()
 		{
@@ -244,6 +297,15 @@ namespace AuroraSharp
 		//       The dict given must match the json structure specified in the API docs."""
 		//       data = {"write": effect_data}
 		//       self.__put("effects", data)
+		public Task WriteEffect(Effect effect)
+		{
+			effect.Command = "add";
+			var json = JsonConvert.SerializeObject(effect);
+
+			json = "{\"write\": " + json + "}";
+			return Put("effects", json);
+		}
+
 
 		public async Task<EffectDetails> GetEffectDetails(string effect)
 		{
@@ -265,7 +327,7 @@ namespace AuroraSharp
 
 		public Task DeleteEffect(string effect)
 		{
-			var data = "{\"write\": {\"command\": \"delete\", \"animName\": " + effect + "}}";
+			var data = "{\"write\": {\"command\": \"delete\", \"animName\": \"" + effect + "\"}}";
 			return Put("effects", data);
 		}
 

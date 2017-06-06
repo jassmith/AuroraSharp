@@ -49,12 +49,9 @@ namespace NanoleafCLI
 				Console.WriteLine("Please make sure Configuration.ini is properly configured.");
 				return 1;
 			}
-
-
-
+			
 			//var aurora = new Aurora("172.20.8.50", "Qxs6JjRa4P2nANiZAYhClZmcslQfVl1t");
 			var aurora = new Aurora(address, authToken);
-			
 			
 			var shouldShowHelp = false;
 			var dumpInfo = false;
